@@ -19,3 +19,24 @@ Thumbs.db
 *_files/
 excel_preview.csv
 page_source_debug.html
+
+# Test / coverage
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+
+# Packaging / build
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
+
+# IDEs / editors
+.vscode/
+.idea/
+
+# Env variants
+.env.local
+.env.dev
+.env.test

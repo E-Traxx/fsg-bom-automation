@@ -2,7 +2,7 @@
 
 > Automate the tedious process of manually entering parts into the [Formula Student Germany](https://www.formulastudent.de/) Costed Carbonized Bill of Material (CCBOM) tool — so you can focus on building fast cars.
 
-![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-browser%20automation-green?logo=playwright&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -36,7 +36,7 @@ python -m venv .venv
 .\.venv\Scripts\activate
 
 # macOS / Linux
-source venv/bin/activate
+source .venv/bin/activate
 ```
 Then
 ```bash
@@ -59,8 +59,9 @@ Edit `.env` with your FSG credentials and team ID:
 ```env
 FSG_USERNAME=your_username
 FSG_PASSWORD=your_password
-TEAM_ID=123
+TEAM_ID=YOUR_TEAM_ID
 TEST_MODE=true
+DRY_RUN=false
 ```
 
 > **🔑 Finding your Team ID:** Open your BOM page on the FSG website. The URL looks like:
@@ -156,7 +157,7 @@ The FSG website has fixed assembly names. If your Excel uses a slightly differen
 | `tire` / `tyre` | Tires |
 | ... and many more | |
 
-You can add your own mappings by editing the `ASSEMBLY_REMAP` dictionary in `bom_automation.py`.
+> You can add your own mappings by editing the `ASSEMBLY_REMAP` dictionary in `bom_automation.py`.
 
 ---
 
@@ -178,8 +179,9 @@ All settings are controlled via the `.env` file. See [`.env.example`](.env.examp
 |---|---|---|
 | `FSG_USERNAME` | *(required)* | Your FSG login username |
 | `FSG_PASSWORD` | *(required)* | Your FSG login password |
-| `TEAM_ID` | `359` | Your team's BOM page ID |
-| `TEST_MODE` | `false` | Limit uploads to first N parts |
+| `TEAM_ID` | *(required)* | Your team's BOM page ID — must be set before running |
+| `TEST_MODE` | `true` | Limit uploads to first N parts — recommended default for safety |
+| `DRY_RUN` | `false` | When `true`, no uploads are performed; script only logs actions |
 | `TEST_LIMIT` | `3` | Number of parts in test mode |
 | `DEFAULT_SYSTEM` | *(empty)* | Auto-select a system (e.g. `BR`) |
 | `BOMS_DIR` | `BOMs` | Folder containing Excel files |
@@ -214,6 +216,10 @@ Every run appends to `bom_log.txt`:
 | **Other Issues or Bugs or Improvement Ideas** | Feel free to make a Pull Request or contact Sharbel from ELBFLORACE e.V. |
 
 ---
+
+## 🔒 Security
+
+If you discover a security issue, please open a GitHub issue or pull request. See `SECURITY.md` for details.
 
 ## 📄 License
 

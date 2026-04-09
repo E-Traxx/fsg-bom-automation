@@ -31,8 +31,11 @@ from playwright.sync_api import sync_playwright
 
 load_dotenv()
 
-# FSG Website URLs — Update TEAM_ID to match your team
-TEAM_ID = os.getenv("TEAM_ID", "359")
+# FSG Website URLs — TEAM_ID must be explicitly set in .env
+TEAM_ID = os.getenv("TEAM_ID", "").strip()
+if not TEAM_ID:
+    print("ERROR: TEAM_ID not set. Copy .env.example to .env and set TEAM_ID.")
+    sys.exit(1)
 BASE_URL = "https://www.formulastudent.de"
 LOGIN_URL = f"{BASE_URL}/login"
 BOM_URL = f"{BASE_URL}/teams/fse/details/bom/tid/{TEAM_ID}"
@@ -40,7 +43,10 @@ BOM_URL = f"{BASE_URL}/teams/fse/details/bom/tid/{TEAM_ID}"
 # Credentials & Behaviour
 FSG_USERNAME = os.getenv("FSG_USERNAME")
 FSG_PASSWORD = os.getenv("FSG_PASSWORD")
-TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+# Safer default for new users: TEST_MODE enabled by default.
+TEST_MODE = os.getenv("TEST_MODE", "true").lower() == "true"
+# Dry-run option: if true, log actions but do not perform uploads.
+DRY_RUN = os.getenv("DRY_RUN", "false").lower() == "true"
 TEST_LIMIT = int(os.getenv("TEST_LIMIT", "3"))
 DEFAULT_SYSTEM = os.getenv("DEFAULT_SYSTEM", "").strip().upper()
 LOG_FILE = os.getenv("LOG_FILE", "bom_log.txt")
@@ -257,6 +263,7 @@ def main() -> None:
     log("FSG CCBOM Automation — Starting")
     if TEST_MODE:
         log(f"TEST MODE: Only the first {TEST_LIMIT} parts will be processed.", "WARN")
+    log(f"Config: TEAM_ID={TEAM_ID} TEST_MODE={TEST_MODE} DRY_RUN={DRY_RUN} BOMS_DIR={BOMS_DIR}")
 
     # ── 1. File selection ────────────────────────────────────────────────
     filepath = select_file()
@@ -376,6 +383,23 @@ def main() -> None:
         log("Nothing to upload — exiting.")
         sys.exit(0)
 
+    # If credentials are not provided, require explicit confirmation to proceed in manual login mode.
+    if not (FSG_USERNAME and FSG_PASSWORD):
+        print("\nWARNING: FSG_USERNAME and/or FSG_PASSWORD not set.")
+        print("The script will open a browser and you will need to log in manually.")
+        manual_confirm = input("Type 'YES' to continue in manual login mode, or anything else to abort: ").strip()
+        if manual_confirm != "YES":
+            log("Aborted by user: credentials missing and manual login declined.", "ERROR")
+            sys.exit(1)
+
+    # Final pre-upload confirmation to prevent accidental uploads.
+    print(f"\nReady to upload to TEAM_ID={TEAM_ID}. Parts to upload: {len(filtered)}")
+    print(f"TEST_MODE={TEST_MODE} DRY_RUN={DRY_RUN}")
+    confirm = input("Type 'YES' to proceed with uploading (or anything else to abort): ").strip()
+    if confirm != "YES":
+        log("Aborted by user before upload.", "WARN")
+        sys.exit(0)
+
     # ── 4. Browser automation ────────────────────────────────────────────
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=False)
@@ -480,15 +504,20 @@ def main() -> None:
                 if item["quantity"]:
                     page.locator("#DTE_Field_quantity").fill(item["quantity"])
 
-                # Submit
-                page.get_by_text("Create", exact=True).click()
-                page.wait_for_selector(
-                    ".DTE_Action_Create", state="hidden", timeout=10000
-                )
+                # Submit (or simulate when DRY_RUN enabled)
+                if DRY_RUN:
+                    log(f"Row {row_num}: [DRY RUN] Would create '{part_name}'", "DRY")
+                    existing.add(dup_key)
+                    success += 1
+                else:
+                    page.get_by_text("Create", exact=True).click()
+                    page.wait_for_selector(
+                        ".DTE_Action_Create", state="hidden", timeout=10000
+                    )
 
-                log(f"Row {row_num}: ✓ '{part_name}'", "OK")
-                existing.add(dup_key)  # prevent re-upload in same run
-                success += 1
+                    log(f"Row {row_num}: ✓ '{part_name}'", "OK")
+                    existing.add(dup_key)  # prevent re-upload in same run
+                    success += 1
 
             except Exception as e:
                 log(f"Row {row_num}: ✗ '{part_name}' — {e}", "ERROR")
