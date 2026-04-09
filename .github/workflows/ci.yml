@@ -18,9 +18,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Run gitleaks secret scan
-        uses: zricethezav/gitleaks-action@v3
+        uses: gitleaks/gitleaks-action@v2
         with:
-          args: '--path=. --verbose --redact'
+          args: detect --source . --report-path gitleaks-report.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
