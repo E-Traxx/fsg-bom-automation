@@ -1,0 +1,21 @@
+# Environment & secrets
+.env*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Logs (generated at runtime)
+bom_log.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug / scratchpad
+*.html
+*_files/
+excel_preview.csv
+page_source_debug.html
