@@ -29,13 +29,13 @@
 ### 1. Clone & Setup
 
 ```bash
-
-https://github.com/user-attachments/assets/a3314fe7-4090-4ba1-b909-0591a7411a95
-
-
 git clone https://github.com/Woonderpipe/fsg-bom-automation.git
-cd fsg-bom-automation
 
+cd fsg-bom-automation
+```
+Create a virtual environment and activate it:
+
+```bash
 python -m venv .venv
 
 # Windows
@@ -71,12 +71,15 @@ DRY_RUN=false
 ```
 
 > **🔑 Finding your Team ID:** Open your BOM page on the FSG website. The URL looks like:
-> `https://www.formulastudent.de/teams/fse/details/bom/tid/359`
+> `https://www.formulastudent.de/teams/fse/details/bom/tid/YOUR_TEAM_ID`
 > Your `TEAM_ID` is the number at the end — `359` in this example.
 
 ### 3. Prepare Your Excel Files
 
 Place your `.xlsx` BOM files in the `BOMs/` folder:
+
+> [!TIP]
+> For best results, use the provided `BOM_template.xlsx` as a starting point. Make sure to follow the required column headers and formatting (or edit the script if your format is different).
 
 ```
 project/
