@@ -1,8 +1,6 @@
 # 🏎️ FSG CCBOM Automation
 
-
 > Automate the tedious process of manually entering parts into the [Formula Student Germany](https://www.formulastudent.de/) Bill of Material (BOM) tool — so you can focus on building fast cars.
-
 <div align="center">
 
   ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
@@ -10,13 +8,7 @@
   ![License](https://img.shields.io/badge/License-MIT-yellow)
 </div>
 
-<div align="center">
-  <video autoplay loop muted playsinline width="100%" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-    <source src="assets/FSG_Tool_Automation_Demo.mp4" type="video/mp4">
-    Your browser does not support the video tag.
-  </video>
-</div>
-
+![FSG_Tool_Automation_Test_Demo](https://github.com/user-attachments/assets/16332de3-8680-460f-a5cd-947594e50dfe)
 
 ## ✨ Features
 
@@ -37,6 +29,10 @@
 ### 1. Clone & Setup
 
 ```bash
+
+https://github.com/user-attachments/assets/a3314fe7-4090-4ba1-b909-0591a7411a95
+
+
 git clone https://github.com/Woonderpipe/fsg-bom-automation.git
 cd fsg-bom-automation
 
@@ -238,5 +234,5 @@ MIT — use it, share it, improve it. Built with 🧡 by Sharbel from [ELBFLORAC
 ---
 
 
-> [!NOTE] Note to FSG
- If you're seeing this — please consider adding a CSV/bulk import feature to the CCBOM tool natively. Every team spends hours on manual data entry that could be automated. We built this tool out of necessity, but a first-party solution would be far better for the entire community. 🙏
+> [!NOTE] 
+> Note to FSG: If you're seeing this — please consider adding a CSV/bulk import feature to the CCBOM tool natively. Every team spends hours on manual data entry that could be automated. We built this tool out of necessity, but a first-party solution would be far better for the entire community. 🙏
