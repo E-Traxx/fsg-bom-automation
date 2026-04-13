@@ -40,3 +40,5 @@ pip-wheel-metadata/
 .env.local
 .env.dev
 .env.test
+
+env
