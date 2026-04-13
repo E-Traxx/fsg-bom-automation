@@ -1,4 +1,8 @@
-# 🏎️ FSG CCBOM Automation
+# 🏎️ FSG CCBOM Automation - E-TRAXX VARIANT
+
+## THANK YOU @ ELBFLORACE
+
+## NOTE: DO NOT REUPLOAD THE USED BOM FILE, IT IS CURRENTLY NOT CLEANLY MANIPULATED
 
 > Automate the tedious process of manually entering parts into the [Formula Student Germany](https://www.formulastudent.de/) Bill of Material (BOM) tool — so you can focus on building fast cars.
 <div align="center">
@@ -29,7 +33,7 @@
 ### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/Woonderpipe/fsg-bom-automation.git
+git clone [https://github.com/E-Traxx/fsg-bom-automation.git](https://github.com/E-Traxx/fsg-bom-automation.git/)
 
 cd fsg-bom-automation
 ```
