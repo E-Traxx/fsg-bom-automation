@@ -18,22 +18,32 @@ All environment configuration lives in `src/env.py`; this module contains
 the constants, helpers, and main automation loop.
 """
 
-import os
-import sys
 import csv
 import glob
+import os
+import sys
 import time
-import pandas as pd
-import openpyxl
 from datetime import datetime
+
+import openpyxl
+import pandas as pd
 from playwright.sync_api import sync_playwright
 
 from src.env import (
-    TEAM_ID, LOGIN_URL, BOM_URL,
-    FSG_USERNAME, FSG_PASSWORD,
-    TEST_MODE, DRY_RUN, DRY_RUN_HOLD_MS, TEST_LIMIT,
-    DEFAULT_SYSTEM, LOG_FILE, BOMS_DIR,
-    DEFAULT_FILE, REQUIRE_INSTALLED,
+    BOM_URL,
+    BOMS_DIR,
+    DEFAULT_FILE,
+    DEFAULT_SYSTEM,
+    DRY_RUN,
+    DRY_RUN_HOLD_MS,
+    FSG_PASSWORD,
+    FSG_USERNAME,
+    LOG_FILE,
+    LOGIN_URL,
+    REQUIRE_INSTALLED,
+    TEAM_ID,
+    TEST_LIMIT,
+    TEST_MODE,
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -41,8 +51,10 @@ from src.env import (
 # ──────────────────────────────────────────────────────────────────────────────
 
 SKIP_COLORS = {
-    "FF00FF00", "0000FF00",   # Green — already uploaded
-    "FFFF0000", "00FF0000",   # Red   — do not upload
+    "FF00FF00",
+    "0000FF00",  # Green — already uploaded
+    "FFFF0000",
+    "00FF0000",  # Red   — do not upload
 }
 
 SYSTEM_MAP = {
@@ -60,58 +72,59 @@ SYSTEM_MAP = {
 
 # Full name (as written in BOM_Final.xlsx) → system code
 SYSTEM_NAME_TO_CODE = {
-    "autonomous system":                    "AT",
-    "brake system":                         "BR",
-    "drivetrain":                           "DT",
-    "engine and tractive system":           "ET",
-    "chassis and body":                     "FR",
-    "grounded low voltage system":          "LV",
-    "miscellaneous fit and finish":         "MS",
-    "steering system":                      "ST",
-    "suspension system":                    "SU",
-    "wheels, wheel bearings and tires":     "WT",
-    "wheels wheel bearings and tires":      "WT",
+    "autonomous system": "AT",
+    "brake system": "BR",
+    "drivetrain": "DT",
+    "engine and tractive system": "ET",
+    "chassis and body": "FR",
+    "grounded low voltage system": "LV",
+    "miscellaneous fit and finish": "MS",
+    "steering system": "ST",
+    "suspension system": "SU",
+    "wheels, wheel bearings and tires": "WT",
+    "wheels wheel bearings and tires": "WT",
 }
 
 ASSEMBLY_REMAP = {
-    "brake caliper":        "Calipers",
-    "brake calipers":       "Calipers",
-    "caliper":              "Calipers",
-    "reservoire":           "Brake Master Cylinder",
-    "reservoir":            "Brake Master Cylinder",
-    "resovoir":             "Brake Master Cylinder",
-    "fitting screw":        "Fasteners",
-    "fastener":             "Fasteners",
-    "screws":               "Fasteners",
-    "bolts":                "Fasteners",
-    "brake disc":           "Brake Discs",
-    "brake disk":           "Brake Discs",
-    "brake pad":            "Brake Pads",
-    "brake line":           "Brake Lines",
-    "master cylinder":      "Brake Master Cylinder",
-    "damper":               "Dampers",
-    "spring":               "Springs",
-    "pushrod":              "Pushrods",
-    "rocker":               "Rockers",
-    "a-arm":                "A-Arms",
-    "chain":                "Chain",
-    "sprocket":             "Sprockets",
-    "differential":         "Differential",
-    "half shaft":           "Half Shafts",
-    "halfshaft":            "Half Shafts",
-    "steering rack":        "Steering Rack",
-    "tie rod":              "Tie Rods",
-    "steering wheel":       "Steering Wheel",
-    "tire":                 "Tires",
-    "tyre":                 "Tires",
-    "wheel bearing":        "Wheel Bearings",
-    "rim":                  "Wheels",
-    "wheel":                "Wheels",
+    "brake caliper": "Calipers",
+    "brake calipers": "Calipers",
+    "caliper": "Calipers",
+    "reservoire": "Brake Master Cylinder",
+    "reservoir": "Brake Master Cylinder",
+    "resovoir": "Brake Master Cylinder",
+    "fitting screw": "Fasteners",
+    "fastener": "Fasteners",
+    "screws": "Fasteners",
+    "bolts": "Fasteners",
+    "brake disc": "Brake Discs",
+    "brake disk": "Brake Discs",
+    "brake pad": "Brake Pads",
+    "brake line": "Brake Lines",
+    "master cylinder": "Brake Master Cylinder",
+    "damper": "Dampers",
+    "spring": "Springs",
+    "pushrod": "Pushrods",
+    "rocker": "Rockers",
+    "a-arm": "A-Arms",
+    "chain": "Chain",
+    "sprocket": "Sprockets",
+    "differential": "Differential",
+    "half shaft": "Half Shafts",
+    "halfshaft": "Half Shafts",
+    "steering rack": "Steering Rack",
+    "tie rod": "Tie Rods",
+    "steering wheel": "Steering Wheel",
+    "tire": "Tires",
+    "tyre": "Tires",
+    "wheel bearing": "Wheel Bearings",
+    "rim": "Wheels",
+    "wheel": "Wheels",
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Logging
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def log(message: str, status: str = "INFO") -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -130,26 +143,40 @@ def log_error_csv(item: dict, reason: str) -> None:
     with open(path, "a", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
         if new_file:
-            w.writerow(["timestamp", "row", "system", "assembly",
-                        "subassembly", "part", "makebuy", "quantity",
-                        "comments", "reason"])
-        w.writerow([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            item.get("row", ""),
-            item.get("system", ""),
-            item.get("assembly", ""),
-            item.get("subassembly", ""),
-            item.get("part", ""),
-            item.get("makebuy", ""),
-            item.get("quantity", ""),
-            item.get("comments", ""),
-            reason,
-        ])
+            w.writerow(
+                [
+                    "timestamp",
+                    "row",
+                    "system",
+                    "assembly",
+                    "subassembly",
+                    "part",
+                    "makebuy",
+                    "quantity",
+                    "comments",
+                    "reason",
+                ]
+            )
+        w.writerow(
+            [
+                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                item.get("row", ""),
+                item.get("system", ""),
+                item.get("assembly", ""),
+                item.get("subassembly", ""),
+                item.get("part", ""),
+                item.get("makebuy", ""),
+                item.get("quantity", ""),
+                item.get("comments", ""),
+                reason,
+            ]
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Excel helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def get_cell_color(sheet, row: int, col: int = 1) -> str | None:
     try:
@@ -186,6 +213,7 @@ def as_bool(v) -> bool:
 # Fuzzy dropdown matching
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def snapshot_options(page, selector: str) -> list[str]:
     try:
         return page.eval_on_selector(
@@ -211,9 +239,14 @@ def _pick(options: list[str], target: str) -> str | None:
     return None
 
 
-def wait_for_options(page, selector: str, expected: str | None = None,
-                     timeout_ms: int = 15000, poll_ms: int = 200,
-                     previous: list[str] | None = None) -> list[str]:
+def wait_for_options(
+    page,
+    selector: str,
+    expected: str | None = None,
+    timeout_ms: int = 15000,
+    poll_ms: int = 200,
+    previous: list[str] | None = None,
+) -> list[str]:
     # poll until the target is in the dropdown, period. slow but reliable.
     # if no target given, just wait for any populated list.
     deadline = time.time() + timeout_ms / 1000
@@ -253,6 +286,7 @@ def fuzzy_select(page, selector: str, target: str) -> bool:
 # File selection
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def discover_excel_files() -> list[str]:
     search_dir = os.path.join(os.getcwd(), BOMS_DIR)
     if not os.path.isdir(search_dir):
@@ -290,13 +324,30 @@ def select_file() -> str:
 # Main
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
-    log("=" * 60)
-    log("FSG CCBOM Automation (e-traxx) — Starting")
+    print("""
+    ▓█████▄▄▄█████▓ ██▀███   ▄▄▄      ▒██   ██▒▒██   ██▒
+    ▓█   ▀▓  ██▒ ▓▒▓██ ▒ ██▒▒████▄    ▒▒ █ █ ▒░▒▒ █ █ ▒░
+    ▒███  ▒ ▓██░ ▒░▓██ ░▄█ ▒▒██  ▀█▄  ░░  █   ░░░  █   ░
+    ▒▓█  ▄░ ▓██▓ ░ ▒██▀▀█▄  ░██▄▄▄▄██  ░ █ █ ▒  ░ █ █ ▒
+    ░▒████▒ ▒██▒ ░ ░██▓ ▒██▒ ▓█   ▓██▒▒██▒ ▒██▒▒██▒ ▒██▒
+    ░░ ▒░ ░ ▒ ░░   ░ ▒▓ ░▒▓░ ▒▒   ▓▒█░▒▒ ░ ░▓ ░▒▒ ░ ░▓ ░
+     ░ ░  ░   ░      ░▒ ░ ▒░  ▒   ▒▒ ░░░   ░▒ ░░░   ░▒ ░
+       ░    ░        ░░   ░   ░   ▒    ░    ░   ░    ░
+       ░  ░           ░           ░  ░ ░    ░   ░    ░
+                                                        """)
+    print("""
+    ▗▄▄▖  ▗▄▖ ▗▖  ▗▖    ▗▄▄▄▖▗▄▖  ▗▄▖ ▗▖
+    ▐▌ ▐▌▐▌ ▐▌▐▛▚▞▜▌      █ ▐▌ ▐▌▐▌ ▐▌▐▌
+    ▐▛▀▚▖▐▌ ▐▌▐▌  ▐▌      █ ▐▌ ▐▌▐▌ ▐▌▐▌
+    ▐▙▄▞▘▝▚▄▞▘▐▌  ▐▌      █ ▝▚▄▞▘▝▚▄▞▘▐▙▄▄▄▖""")
     if TEST_MODE:
         log(f"TEST MODE: Only the first {TEST_LIMIT} parts will be processed.", "WARN")
-    log(f"Config: TEAM_ID={TEAM_ID} TEST_MODE={TEST_MODE} DRY_RUN={DRY_RUN} "
-        f"BOMS_DIR={BOMS_DIR} REQUIRE_INSTALLED={REQUIRE_INSTALLED}")
+    log(
+        f"Config: TEAM_ID={TEAM_ID} TEST_MODE={TEST_MODE} DRY_RUN={DRY_RUN} "
+        f"BOMS_DIR={BOMS_DIR} REQUIRE_INSTALLED={REQUIRE_INSTALLED}"
+    )
 
     # ── 1. File ──────────────────────────────────────────────────────────
     filepath = select_file()
@@ -318,20 +369,27 @@ def main() -> None:
     # NOTE: website "part" is filled from NXTeilname (the NX/CAD identifier);
     # Excel "Part Name" (human-readable) is pushed into the website comment.
     COLMAP = {
-        "system":       "system",
-        "assembly":     "assembly",
+        "system": "system",
+        "assembly": "assembly",
         "sub-assembly": "subassembly",
-        "part name":    "part_label",
-        "nxteilname":   "part",
-        "make/buy":     "makebuy",
-        "comment":      "comments",
-        "quantity":     "quantity",
-        "eingebaut?":                       "installed",
-        "if make ccbom eintrag erstellt?":  "uploaded",
+        "part name": "part_label",
+        "nxteilname": "part",
+        "make/buy": "makebuy",
+        "comment": "comments",
+        "quantity": "quantity",
+        "eingebaut?": "installed",
+        "if make ccbom eintrag erstellt?": "uploaded",
     }
-    missing = [c for c in ("system", "assembly", "part name", "nxteilname") if c not in df.columns]
+    missing = [
+        c
+        for c in ("system", "assembly", "part name", "nxteilname")
+        if c not in df.columns
+    ]
     if missing:
-        log(f"Missing required columns: {missing}. Available: {list(df.columns)}", "ERROR")
+        log(
+            f"Missing required columns: {missing}. Available: {list(df.columns)}",
+            "ERROR",
+        )
         sys.exit(1)
 
     # Header is on row 2 → first data row is Excel row 3.
@@ -354,15 +412,19 @@ def main() -> None:
 
     if DEFAULT_SYSTEM and DEFAULT_SYSTEM in unique_codes:
         run_system = DEFAULT_SYSTEM
-        log(f"System filter (from .env): {run_system} — "
-            f"{SYSTEM_MAP.get(run_system, run_system)}")
+        log(
+            f"System filter (from .env): {run_system} — "
+            f"{SYSTEM_MAP.get(run_system, run_system)}"
+        )
     else:
         print("\nSystems found in Excel:")
         for s in unique_codes:
             print(f"  • {s:4s}  {SYSTEM_MAP.get(s, s)}")
-        run_system = input(
-            "\nEnter system code to filter (e.g. 'BR') or 'ALL' for everything: "
-        ).strip().upper()
+        run_system = (
+            input("\nEnter system code to filter (e.g. 'BR') or 'ALL' for everything: ")
+            .strip()
+            .upper()
+        )
 
     # ── 3. Filter rows ───────────────────────────────────────────────────
     filtered = []
@@ -407,7 +469,10 @@ def main() -> None:
 
         if uploaded:
             skipped_uploaded += 1
-            log(f"Row {excel_row}: Skipped — already uploaded (CCBOM Eintrag erstellt)", "SKIP")
+            log(
+                f"Row {excel_row}: Skipped — already uploaded (CCBOM Eintrag erstellt)",
+                "SKIP",
+            )
             continue
 
         if REQUIRE_INSTALLED and not installed:
@@ -438,22 +503,26 @@ def main() -> None:
         elif qty_str.endswith(".0"):
             qty_str = qty_str[:-2]
 
-        filtered.append({
-            "row": excel_row,
-            "system": sys_code,
-            "assembly": assembly,
-            "subassembly": subassembly,
-            "part": part,
-            "makebuy": mb,
-            "quantity": qty_str,
-            "comments": comments,
-        })
+        filtered.append(
+            {
+                "row": excel_row,
+                "system": sys_code,
+                "assembly": assembly,
+                "subassembly": subassembly,
+                "part": part,
+                "makebuy": mb,
+                "quantity": qty_str,
+                "comments": comments,
+            }
+        )
 
-    log(f"Filtering complete: {len(filtered)} parts to upload "
+    log(
+        f"Filtering complete: {len(filtered)} parts to upload "
         f"({skipped_green} green / {skipped_red} red / "
         f"{skipped_uploaded} already uploaded / "
         f"{skipped_not_installed} not installed / "
-        f"{skipped_example} example / {skipped_empty} empty skipped)")
+        f"{skipped_example} example / {skipped_empty} empty skipped)"
+    )
 
     if TEST_MODE and len(filtered) > TEST_LIMIT:
         log(f"Test Mode: limiting {len(filtered)} → {TEST_LIMIT} parts")
@@ -466,14 +535,21 @@ def main() -> None:
     if not (FSG_USERNAME and FSG_PASSWORD):
         print("\nWARNING: FSG_USERNAME and/or FSG_PASSWORD not set.")
         print("The script will open a browser and you will need to log in manually.")
-        manual_confirm = input("Type 'YES' to continue in manual login mode, or anything else to abort: ").strip()
+        manual_confirm = input(
+            "Type 'YES' to continue in manual login mode, or anything else to abort: "
+        ).strip()
         if manual_confirm != "YES":
-            log("Aborted by user: credentials missing and manual login declined.", "ERROR")
+            log(
+                "Aborted by user: credentials missing and manual login declined.",
+                "ERROR",
+            )
             sys.exit(1)
 
     print(f"\nReady to upload to TEAM_ID={TEAM_ID}. Parts to upload: {len(filtered)}")
     print(f"TEST_MODE={TEST_MODE} DRY_RUN={DRY_RUN}")
-    confirm = input("Type 'YES' to proceed with uploading (or anything else to abort): ").strip()
+    confirm = input(
+        "Type 'YES' to proceed with uploading (or anything else to abort): "
+    ).strip()
     if confirm != "YES":
         log("Aborted by user before upload.", "WARN")
         sys.exit(0)
@@ -512,10 +588,10 @@ def main() -> None:
             for r in data:
                 if isinstance(r, dict):
                     key = (
-                        f"{str(r.get('system','')).strip()}_"
-                        f"{str(r.get('assembly','')).strip()}_"
-                        f"{str(r.get('subassembly','')).strip()}_"
-                        f"{str(r.get('part','')).strip()}"
+                        f"{str(r.get('system', '')).strip()}_"
+                        f"{str(r.get('assembly', '')).strip()}_"
+                        f"{str(r.get('subassembly', '')).strip()}_"
+                        f"{str(r.get('part', '')).strip()}"
                     ).lower()
                     existing.add(key)
             log(f"Found {len(existing)} existing parts on the website.")
@@ -534,7 +610,9 @@ def main() -> None:
                     cancel.first.click()
                 else:
                     page.keyboard.press("Escape")
-                page.wait_for_selector(".DTE_Action_Create", state="hidden", timeout=3000)
+                page.wait_for_selector(
+                    ".DTE_Action_Create", state="hidden", timeout=3000
+                )
             except Exception:
                 try:
                     page.keyboard.press("Escape")
@@ -556,9 +634,14 @@ def main() -> None:
             # event, then switch to the target. prevents stuck assembly list.
             sys_options = snapshot_options(page, "#DTE_Field_system")
             other = next(
-                (o for o in sys_options
-                 if o and o.strip() and o.strip() != sys_label
-                 and o.strip().lower() not in ("", "select", "-")),
+                (
+                    o
+                    for o in sys_options
+                    if o
+                    and o.strip()
+                    and o.strip() != sys_label
+                    and o.strip().lower() not in ("", "select", "-")
+                ),
                 None,
             )
             if other:
@@ -580,7 +663,10 @@ def main() -> None:
             if sub_raw and page.locator("#DTE_Field_subassembly").count():
                 wait_for_options(page, "#DTE_Field_subassembly", sub_raw)
                 if not fuzzy_select(page, "#DTE_Field_subassembly", sub_raw):
-                    log(f"Row {item['row']}: Sub-assembly '{sub_raw}' not in dropdown — leaving blank", "WARN")
+                    log(
+                        f"Row {item['row']}: Sub-assembly '{sub_raw}' not in dropdown — leaving blank",
+                        "WARN",
+                    )
                 else:
                     page.locator("#DTE_Field_subassembly").dispatch_event("change")
 
@@ -602,7 +688,9 @@ def main() -> None:
                 close_modal()
             else:
                 page.get_by_text("Create", exact=True).click()
-                page.wait_for_selector(".DTE_Action_Create", state="hidden", timeout=10000)
+                page.wait_for_selector(
+                    ".DTE_Action_Create", state="hidden", timeout=10000
+                )
                 log(f"Row {item['row']}: ✓ '{part_name}'", "OK")
 
         for item in filtered:
@@ -640,7 +728,9 @@ def main() -> None:
 
         elapsed = round(time.time() - start_time, 1)
         log("─" * 60)
-        log(f"Done in {elapsed}s — {success} uploaded / {skipped_dup} duplicates / {failed} failed")
+        log(
+            f"Done in {elapsed}s — {success} uploaded / {skipped_dup} duplicates / {failed} failed"
+        )
         log("─" * 60)
 
         input("\nPress ENTER to close the browser...")
