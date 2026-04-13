@@ -20,6 +20,7 @@ the constants, helpers, and main automation loop.
 
 import os
 import sys
+import csv
 import glob
 import time
 import pandas as pd
@@ -120,6 +121,32 @@ def log(message: str, status: str = "INFO") -> None:
         f.write(line + "\n")
 
 
+ERROR_CSV = os.getenv("ERROR_CSV", "bom_errors.csv")
+
+
+def log_error_csv(item: dict, reason: str) -> None:
+    path = ERROR_CSV
+    new_file = not os.path.isfile(path)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        if new_file:
+            w.writerow(["timestamp", "row", "system", "assembly",
+                        "subassembly", "part", "makebuy", "quantity",
+                        "comments", "reason"])
+        w.writerow([
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            item.get("row", ""),
+            item.get("system", ""),
+            item.get("assembly", ""),
+            item.get("subassembly", ""),
+            item.get("part", ""),
+            item.get("makebuy", ""),
+            item.get("quantity", ""),
+            item.get("comments", ""),
+            reason,
+        ])
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Excel helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -169,84 +196,56 @@ def snapshot_options(page, selector: str) -> list[str]:
         return []
 
 
+def _pick(options: list[str], target: str) -> str | None:
+    resolved = ASSEMBLY_REMAP.get(target.lower().strip(), target)
+    resolved_lower = resolved.lower().strip()
+    if resolved in options:
+        return resolved
+    for opt in options:
+        if opt.lower().strip() == resolved_lower:
+            return opt
+    for opt in options:
+        ol = opt.lower().strip()
+        if resolved_lower in ol or ol in resolved_lower:
+            return opt
+    return None
+
+
 def wait_for_options(page, selector: str, expected: str | None = None,
-                     timeout_ms: int = 5000, poll_ms: int = 100,
+                     timeout_ms: int = 15000, poll_ms: int = 200,
                      previous: list[str] | None = None) -> list[str]:
-    # poll the <select> until the AJAX-driven option list settles.
-    # `previous` is the stale list from the prior row — we ignore it until
-    # the dropdown has actually repopulated, otherwise a stale "Brackets"
-    # can satisfy the match and then vanish before fuzzy_select runs.
-    resolved = ASSEMBLY_REMAP.get(expected.lower().strip(), expected) if expected else None
-    resolved_lower = resolved.lower().strip() if resolved else None
+    # poll until the target is in the dropdown, period. slow but reliable.
+    # if no target given, just wait for any populated list.
     deadline = time.time() + timeout_ms / 1000
     options: list[str] = []
-    last_snapshot: list[str] | None = None
-    stable_hits = 0
     while time.time() < deadline:
         options = snapshot_options(page, selector)
-        # stale list from previous row — keep waiting for the refresh
-        if previous is not None and options == previous:
-            last_snapshot = None
-            stable_hits = 0
-            page.wait_for_timeout(poll_ms)
-            continue
         real = [o for o in options if o and o.strip()]
-        populated = real and (
-            len(real) > 1 or real[0].strip().lower() not in ("", "select", "-")
-        )
-        if populated:
-            match_ok = resolved_lower is None or any(
-                ol == resolved_lower or resolved_lower in ol or ol in resolved_lower
-                for ol in (o.lower().strip() for o in real)
-            )
-            if match_ok:
-                # require two consecutive identical snapshots — confirms AJAX settled
-                if options == last_snapshot:
-                    stable_hits += 1
-                    if stable_hits >= 1:
-                        return options
-                else:
-                    last_snapshot = options
-                    stable_hits = 0
+        if expected is None:
+            if real and real[0].strip().lower() not in ("", "select", "-"):
+                return options
+        elif real and _pick(options, expected) is not None:
+            return options
         page.wait_for_timeout(poll_ms)
     return options
 
 
 def fuzzy_select(page, selector: str, target: str) -> bool:
-    resolved = ASSEMBLY_REMAP.get(target.lower().strip(), target)
-    resolved_lower = resolved.lower().strip()
-
-    def pick(options: list[str]) -> str | None:
-        if resolved in options:
-            return resolved
-        for opt in options:
-            if opt.lower().strip() == resolved_lower:
-                return opt
-        for opt in options:
-            ol = opt.lower().strip()
-            if resolved_lower in ol or ol in resolved_lower:
-                return opt
-        return None
-
-    # retry once: the options list can change underfoot when AJAX repopulates
-    # between our read and the select_option call.
-    for attempt in range(2):
-        try:
-            options = snapshot_options(page, selector)
-            choice = pick(options)
-            if choice is None:
-                if attempt == 0:
-                    page.wait_for_timeout(200)
-                    continue
-                return False
-            page.locator(selector).select_option(label=choice)
-            return True
-        except Exception as e:
-            if attempt == 0:
+    # wait (again) for the target to be present, then select it.
+    # retries the select itself in case AJAX wipes the list between
+    # snapshot and select_option.
+    deadline = time.time() + 15
+    while time.time() < deadline:
+        options = snapshot_options(page, selector)
+        choice = _pick(options, target)
+        if choice is not None:
+            try:
+                page.locator(selector).select_option(label=choice)
+                return True
+            except Exception:
                 page.wait_for_timeout(200)
                 continue
-            log(f"Fuzzy-match error for '{target}': {e}", "WARN")
-            return False
+        page.wait_for_timeout(200)
     return False
 
 
@@ -316,18 +315,21 @@ def main() -> None:
     df.columns = [str(c).strip().lower() for c in df.columns]
 
     # Map the e-traxx column names to the internal keys we use below.
+    # NOTE: website "part" is filled from NXTeilname (the NX/CAD identifier);
+    # Excel "Part Name" (human-readable) is pushed into the website comment.
     COLMAP = {
         "system":       "system",
         "assembly":     "assembly",
         "sub-assembly": "subassembly",
-        "part name":    "part",
+        "part name":    "part_label",
+        "nxteilname":   "part",
         "make/buy":     "makebuy",
         "comment":      "comments",
         "quantity":     "quantity",
         "eingebaut?":                       "installed",
         "if make ccbom eintrag erstellt?":  "uploaded",
     }
-    missing = [c for c in ("system", "assembly", "part name") if c not in df.columns]
+    missing = [c for c in ("system", "assembly", "part name", "nxteilname") if c not in df.columns]
     if missing:
         log(f"Missing required columns: {missing}. Available: {list(df.columns)}", "ERROR")
         sys.exit(1)
@@ -381,6 +383,7 @@ def main() -> None:
         if subassembly.lower() in ("nan", ""):
             subassembly = ""
         part = str(g(row, "part", "")).strip()
+        part_label = str(g(row, "part_label", "")).strip()
         quantity = g(row, "quantity", "")
         makebuy = str(g(row, "makebuy", "")).strip().lower()
         comments = str(g(row, "comments", "")).strip()
@@ -394,7 +397,11 @@ def main() -> None:
             skipped_empty += 1
             continue
 
-        if "BEISPIEL" in part.upper() or "EXAMPLE" in part.upper():
+        if part_label.lower() in ("nan", ""):
+            part_label = ""
+
+        combined = f"{part.upper()} {part_label.upper()}"
+        if "BEISPIEL" in combined or "EXAMPLE" in combined:
             skipped_example += 1
             continue
 
@@ -420,6 +427,10 @@ def main() -> None:
 
         if comments.lower() in ("nan", ""):
             comments = ""
+
+        # Website comment = Excel "Part Name"; append existing comment if any.
+        if part_label:
+            comments = f"{part_label} — {comments}" if comments else part_label
 
         qty_str = str(quantity).strip()
         if qty_str.lower() in ("nan", ""):
@@ -516,6 +527,84 @@ def main() -> None:
         skipped_dup = 0
         start_time = time.time()
 
+        def close_modal() -> None:
+            try:
+                cancel = page.get_by_text("Cancel", exact=True)
+                if cancel.count():
+                    cancel.first.click()
+                else:
+                    page.keyboard.press("Escape")
+                page.wait_for_selector(".DTE_Action_Create", state="hidden", timeout=3000)
+            except Exception:
+                try:
+                    page.keyboard.press("Escape")
+                    page.wait_for_timeout(500)
+                except Exception:
+                    pass
+
+        def try_create(item: dict) -> None:
+            sys_code = item["system"]
+            asm_raw = item["assembly"]
+            sub_raw = item["subassembly"]
+            part_name = item["part"]
+
+            page.get_by_text("New", exact=True).click()
+            page.wait_for_selector(".DTE_Action_Create")
+
+            sys_label = SYSTEM_MAP.get(sys_code, sys_code)
+            # jiggle: pick a different system first to force a real change
+            # event, then switch to the target. prevents stuck assembly list.
+            sys_options = snapshot_options(page, "#DTE_Field_system")
+            other = next(
+                (o for o in sys_options
+                 if o and o.strip() and o.strip() != sys_label
+                 and o.strip().lower() not in ("", "select", "-")),
+                None,
+            )
+            if other:
+                try:
+                    page.locator("#DTE_Field_system").select_option(label=other)
+                    page.locator("#DTE_Field_system").dispatch_event("change")
+                    page.wait_for_timeout(300)
+                except Exception:
+                    pass
+            if not fuzzy_select(page, "#DTE_Field_system", sys_label):
+                raise RuntimeError(f"System '{sys_label}' not found in dropdown")
+            page.locator("#DTE_Field_system").dispatch_event("change")
+            wait_for_options(page, "#DTE_Field_assembly", asm_raw)
+
+            if not fuzzy_select(page, "#DTE_Field_assembly", asm_raw):
+                raise RuntimeError(f"Assembly '{asm_raw}' not found in dropdown")
+            page.locator("#DTE_Field_assembly").dispatch_event("change")
+
+            if sub_raw and page.locator("#DTE_Field_subassembly").count():
+                wait_for_options(page, "#DTE_Field_subassembly", sub_raw)
+                if not fuzzy_select(page, "#DTE_Field_subassembly", sub_raw):
+                    log(f"Row {item['row']}: Sub-assembly '{sub_raw}' not in dropdown — leaving blank", "WARN")
+                else:
+                    page.locator("#DTE_Field_subassembly").dispatch_event("change")
+
+            page.locator("#DTE_Field_part").fill(part_name)
+
+            if item["makebuy"] == "m":
+                page.locator("#DTE_Field_makebuy_0").check()
+            else:
+                page.locator("#DTE_Field_makebuy_1").check()
+
+            if item["comments"]:
+                page.locator("#DTE_Field_comments").fill(item["comments"])
+            if item["quantity"]:
+                page.locator("#DTE_Field_quantity").fill(item["quantity"])
+
+            if DRY_RUN:
+                log(f"Row {item['row']}: [DRY RUN] Would create '{part_name}'", "DRY")
+                page.wait_for_timeout(DRY_RUN_HOLD_MS)
+                close_modal()
+            else:
+                page.get_by_text("Create", exact=True).click()
+                page.wait_for_selector(".DTE_Action_Create", state="hidden", timeout=10000)
+                log(f"Row {item['row']}: ✓ '{part_name}'", "OK")
+
         for item in filtered:
             sys_code = item["system"]
             asm_raw = item["assembly"]
@@ -529,76 +618,25 @@ def main() -> None:
                 skipped_dup += 1
                 continue
 
-            try:
-                page.get_by_text("New", exact=True).click()
-                page.wait_for_selector(".DTE_Action_Create")
-
-                sys_label = SYSTEM_MAP.get(sys_code, sys_code)
-                asm_before = snapshot_options(page, "#DTE_Field_assembly")
-                if not fuzzy_select(page, "#DTE_Field_system", sys_label):
-                    raise RuntimeError(f"System '{sys_label}' not found in dropdown")
-                page.locator("#DTE_Field_system").dispatch_event("change")
-                wait_for_options(page, "#DTE_Field_assembly", asm_raw,
-                                 previous=asm_before)
-
-                if not fuzzy_select(page, "#DTE_Field_assembly", asm_raw):
-                    raise RuntimeError(f"Assembly '{asm_raw}' not found in dropdown")
-                sub_before = snapshot_options(page, "#DTE_Field_subassembly")
-                page.locator("#DTE_Field_assembly").dispatch_event("change")
-
-                if sub_raw and page.locator("#DTE_Field_subassembly").count():
-                    wait_for_options(page, "#DTE_Field_subassembly", sub_raw,
-                                     previous=sub_before)
-                    if not fuzzy_select(page, "#DTE_Field_subassembly", sub_raw):
-                        log(f"Row {row_num}: Sub-assembly '{sub_raw}' not in dropdown — leaving blank", "WARN")
-                    else:
-                        page.locator("#DTE_Field_subassembly").dispatch_event("change")
-
-                page.locator("#DTE_Field_part").fill(part_name)
-
-                if item["makebuy"] == "m":
-                    page.locator("#DTE_Field_makebuy_0").check()
-                else:
-                    page.locator("#DTE_Field_makebuy_1").check()
-
-                if item["comments"]:
-                    page.locator("#DTE_Field_comments").fill(item["comments"])
-                if item["quantity"]:
-                    page.locator("#DTE_Field_quantity").fill(item["quantity"])
-
-                if DRY_RUN:
-                    log(f"Row {row_num}: [DRY RUN] Would create '{part_name}'", "DRY")
-                    existing.add(dup_key)
-                    success += 1
-                    # hold the filled form so the user can eyeball it before moving on
-                    page.wait_for_timeout(DRY_RUN_HOLD_MS)
-                    # close the modal so the next row starts from a clean form
-                    try:
-                        cancel = page.get_by_text("Cancel", exact=True)
-                        if cancel.count():
-                            cancel.first.click()
-                        else:
-                            page.keyboard.press("Escape")
-                        page.wait_for_selector(".DTE_Action_Create", state="hidden", timeout=3000)
-                    except Exception:
-                        pass
-                else:
-                    page.get_by_text("Create", exact=True).click()
-                    page.wait_for_selector(
-                        ".DTE_Action_Create", state="hidden", timeout=10000
-                    )
-                    log(f"Row {row_num}: ✓ '{part_name}'", "OK")
-                    existing.add(dup_key)
-                    success += 1
-
-            except Exception as e:
-                log(f"Row {row_num}: ✗ '{part_name}' — {e}", "ERROR")
-                failed += 1
+            last_err: Exception | None = None
+            for attempt in range(2):
                 try:
-                    page.keyboard.press("Escape")
-                    page.wait_for_timeout(500)
-                except Exception:
-                    pass
+                    try_create(item)
+                    existing.add(dup_key)
+                    success += 1
+                    last_err = None
+                    break
+                except Exception as e:
+                    last_err = e
+                    close_modal()
+                    if attempt == 0:
+                        log(f"Row {row_num}: retrying after error — {e}", "WARN")
+                        page.wait_for_timeout(1000)
+
+            if last_err is not None:
+                log(f"Row {row_num}: ✗ '{part_name}' — {last_err}", "ERROR")
+                log_error_csv(item, str(last_err))
+                failed += 1
 
         elapsed = round(time.time() - start_time, 1)
         log("─" * 60)
