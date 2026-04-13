@@ -99,7 +99,7 @@ project/
 ### 4. Run
 
 ```bash
-python bom_automation.py
+python e_traxx.py
 ```
 
 The script will:
