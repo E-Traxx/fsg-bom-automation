@@ -660,15 +660,62 @@ def main() -> None:
                 raise RuntimeError(f"Assembly '{asm_raw}' not found in dropdown")
             page.locator("#DTE_Field_assembly").dispatch_event("change")
 
-            if sub_raw and page.locator("#DTE_Field_subassembly").count():
-                wait_for_options(page, "#DTE_Field_subassembly", sub_raw)
-                if not fuzzy_select(page, "#DTE_Field_subassembly", sub_raw):
-                    log(
-                        f"Row {item['row']}: Sub-assembly '{sub_raw}' not in dropdown — leaving blank",
-                        "WARN",
-                    )
+            # probe whichever id the live DOM exposes — the e-traxx template
+            # has drifted between "subassembly" and "sub_assembly"
+            sub_sel = None
+            for candidate in ("#DTE_Field_sub_assembly", "#DTE_Field_subassembly"):
+                if page.locator(candidate).count():
+                    sub_sel = candidate
+                    break
+
+            if sub_raw and sub_sel:
+                # only wait for the dropdown to *populate*, not for our specific
+                # target — most sub-assemblies don't exist yet, so waiting the
+                # full timeout on every row is wasted time. quick single-shot
+                # pick first; only fall through to _CUSTOMNEW if not present.
+                wait_for_options(page, sub_sel)
+                options = snapshot_options(page, sub_sel)
+                choice = _pick(options, sub_raw)
+                if choice is None:
+                    # not in dropdown → use "- new -" (_CUSTOMNEW) to create it
+                    try:
+                        page.locator(sub_sel).select_option(value="_CUSTOMNEW")
+                        page.locator(sub_sel).dispatch_event("change")
+                        name_sel = None
+                        for cand in (
+                            "#DTE_Field_sub_assembly_name",
+                            "#DTE_Field_subassembly_name",
+                        ):
+                            try:
+                                page.wait_for_selector(
+                                    cand, state="visible", timeout=3000
+                                )
+                                name_sel = cand
+                                break
+                            except Exception:
+                                continue
+                        if name_sel is None:
+                            raise RuntimeError(
+                                "sub-assembly name input never became visible"
+                            )
+                        page.locator(name_sel).fill(sub_raw)
+                        log(
+                            f"Row {item['row']}: Sub-assembly '{sub_raw}' not found — creating new",
+                            "OK",
+                        )
+                    except Exception as e:
+                        log(
+                            f"Row {item['row']}: Failed to create sub-assembly '{sub_raw}' ({e}) — leaving blank",
+                            "WARN",
+                        )
                 else:
-                    page.locator("#DTE_Field_subassembly").dispatch_event("change")
+                    page.locator(sub_sel).select_option(label=choice)
+                    page.locator(sub_sel).dispatch_event("change")
+            elif sub_raw and not sub_sel:
+                log(
+                    f"Row {item['row']}: Sub-assembly dropdown not found in DOM — leaving blank",
+                    "WARN",
+                )
 
             page.locator("#DTE_Field_part").fill(part_name)
 
