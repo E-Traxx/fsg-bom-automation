@@ -14,6 +14,10 @@ bom_log.txt
 .DS_Store
 Thumbs.db
 
+# Excel lockfiles & private BOMs
+~$*
+BOMs/CCBOM Part List.xlsm
+
 # Debug / scratchpad
 *.html
 *_files/
